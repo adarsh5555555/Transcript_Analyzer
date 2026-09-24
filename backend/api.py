@@ -6,8 +6,6 @@ import re
 import secrets
 import time
 from collections import defaultdict, deque
-from pathlib import Path
-
 from fastapi import FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -18,6 +16,7 @@ from .core import analyzer
 from .core.llm import LLM
 from .core.parser import ParseError, parse_guide, parse_transcripts
 from .core.schemas import AnalysisResult, AskRequest, AskResult
+from .core.store import build_store
 
 log = logging.getLogger("uvicorn.error")
 
@@ -26,9 +25,14 @@ app.add_middleware(CORSMiddleware, allow_origin_regex=r"http://(localhost|127\.0
                    allow_methods=["*"], allow_headers=["*"])
 
 llm = LLM(config.OPENAI_MODEL)
-# analysis_id -> result. Results are also written to .cache/ so a restart (or
-# re-uploading the same files) costs nothing. At 30+ transcripts: Redis/Postgres.
-analyses: dict[str, AnalysisResult] = {}
+# Postgres when DATABASE_URL is set, JSON files otherwise. Keyed by the content
+# hash, so the store is also the cache: the same files never cost a second run.
+store = build_store(config.DATABASE_URL, config.CACHE_DIR, config.SEED_CACHE_DIR)
+
+
+@app.on_event("shutdown")
+async def _close_store():
+    await store.close()
 
 # --- protection for public deploys -------------------------------------------
 # A shared passcode plus a per-IP hourly cap: the model calls cost real money, so
@@ -77,25 +81,15 @@ def _analysis_id(guide_text: str, files: list[tuple[str, str]]) -> str:
     return h.hexdigest()[:16]
 
 
-def _cache_path(analysis_id: str) -> Path:
-    return config.CACHE_DIR / f"analysis_{analysis_id}.json"
-
-
-def _load(analysis_id: str) -> AnalysisResult | None:
-    if not re.fullmatch(r"[0-9a-f]{16}", analysis_id):   # it becomes a file path
+async def _load(analysis_id: str) -> AnalysisResult | None:
+    if not re.fullmatch(r"[0-9a-f]{16}", analysis_id):   # it can become a file path
         return None
-    if analysis_id in analyses:
-        return analyses[analysis_id]
-    for path in (_cache_path(analysis_id), config.SEED_CACHE_DIR / f"analysis_{analysis_id}.json"):
-        if path.exists():
-            analyses[analysis_id] = AnalysisResult.model_validate_json(path.read_text())
-            return analyses[analysis_id]
-    return None
+    return await store.get(analysis_id)
 
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "model": config.OPENAI_MODEL,
+    return {"status": "ok", "model": config.OPENAI_MODEL, "store": store.kind,
             "passcode_required": bool(config.APP_PASSCODE)}
 
 
@@ -143,7 +137,7 @@ async def analyze(
         raise HTTPException(422, str(e))
 
     analysis_id = _analysis_id(guide_text, texts)
-    cached = None if refresh else _load(analysis_id)
+    cached = None if refresh else await _load(analysis_id)
     log.info("analyze %s: transcripts=%s guide=%s (%d questions) %s", analysis_id,
              [n for n, _ in texts], guide_name, len(parsed_guide.questions) if parsed_guide else 0,
              "cache hit" if cached else "running model")
@@ -159,12 +153,7 @@ async def analyze(
         analysis_id=analysis_id, model=config.OPENAI_MODEL, guide=parsed_guide,
         transcripts=transcripts, hot_questions=hot, answers=answers, synthesis=synthesis,
         stats=stats)
-    analyses[analysis_id] = result
-    try:
-        config.CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        _cache_path(analysis_id).write_text(result.model_dump_json())
-    except OSError as e:          # read-only filesystem on some hosts: caching is optional
-        log.warning("could not write cache: %s", e)
+    await store.put(result)
     return result
 
 
@@ -177,13 +166,13 @@ async def ask(req: AskRequest, request: Request, x_passcode: str | None = Header
         raise HTTPException(422, "question is empty")
     if len(question) > 1000:
         raise HTTPException(422, "question is too long (max 1000 characters)")
-    if req.transcripts:              # stateless path (serverless)
-        transcripts = req.transcripts
-    else:                            # stateful path (long-running server)
-        result = _load(req.analysis_id)
-        if result is None:
-            raise HTTPException(404, "unknown analysis_id; run /api/analyze first")
+    result = await _load(req.analysis_id)
+    if result is not None:
         transcripts = result.transcripts
+    elif req.transcripts:            # fallback when no shared store is configured
+        transcripts = req.transcripts
+    else:
+        raise HTTPException(404, "unknown analysis_id; run /api/analyze first")
     try:
         return await analyzer.ask(llm, transcripts, question, req.history)
     except Exception as e:

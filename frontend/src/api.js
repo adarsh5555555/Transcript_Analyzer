@@ -45,13 +45,25 @@ export function analyze({ files, guide, useSamples, refresh }) {
   return request("/api/analyze", { method: "POST", body: form, headers: authHeaders() });
 }
 
-export function ask(analysisId, question, history = [], transcripts = null) {
-  return request("/api/ask", {
-    method: "POST",
-    headers: authHeaders({ "Content-Type": "application/json" }),
-    // transcripts travel with the question so the API needs no server-side state
-    body: JSON.stringify({ analysis_id: analysisId, question, history, transcripts }),
-  });
+export async function ask(analysisId, question, history = [], transcripts = null) {
+  const send = (body) =>
+    request("/api/ask", {
+      method: "POST",
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify(body),
+    });
+
+  try {
+    // Normal path: the server looks the analysis up in its store.
+    return await send({ analysis_id: analysisId, question, history });
+  } catch (e) {
+    // No shared store (serverless without a database): resend the transcripts
+    // this browser already has, so the question can still be answered.
+    if (transcripts && /unknown analysis_id/i.test(e.message)) {
+      return send({ analysis_id: analysisId, question, history, transcripts });
+    }
+    throw e;
+  }
 }
 
 export async function needsPasscode() {

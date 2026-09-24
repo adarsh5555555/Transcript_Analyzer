@@ -108,3 +108,26 @@ def test_you_is_the_interviewer_and_inline_hms_timestamps():
     assert [s.is_expert for s in t.segments] == [True, False, True]
     assert t.speaker_label == "Amit" and t.expert_name == "Amit"
     assert t.segments[2].timestamp == "00:01:17" and t.segments[2].seconds == 77
+
+
+def test_file_store_roundtrip(tmp_path):
+    """The store keeps an analysis retrievable by id, and reads the shipped seed."""
+    import asyncio
+
+    from backend.config import SEED_CACHE_DIR
+    from backend.core.schemas import AnalysisResult
+    from backend.core.store import FileStore
+
+    seed = sorted(SEED_CACHE_DIR.glob("analysis_*.json"))
+    assert seed, "the sample analysis should ship with the repo"
+    shipped = AnalysisResult.model_validate_json(seed[0].read_text())
+
+    store = FileStore(cache_dir=tmp_path, seed_dir=SEED_CACHE_DIR)
+    assert asyncio.run(store.get(shipped.analysis_id)) is not None      # from the seed dir
+
+    copy = shipped.model_copy(update={"analysis_id": "0123456789abcdef"})
+    asyncio.run(store.put(copy))
+    fresh = FileStore(cache_dir=tmp_path, seed_dir=SEED_CACHE_DIR)      # no memory, reads the file
+    got = asyncio.run(fresh.get("0123456789abcdef"))
+    assert got is not None and len(got.transcripts) == len(shipped.transcripts)
+    assert asyncio.run(fresh.get("ffffffffffffffff")) is None

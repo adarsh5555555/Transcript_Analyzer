@@ -43,12 +43,23 @@ vercel            # first run: log in, accept the defaults, it deploys a preview
 vercel --prod     # the public link
 ```
 
-Then add the environment variables (dashboard → Settings → Environment Variables, or the CLI):
+### Database (needed on serverless)
+
+Serverless instances share no memory or disk, so analyses must live in Postgres or an analysis
+cannot be reopened by the next request. [Neon](https://neon.tech) has a free tier with no card:
+create a project, copy the **pooled** connection string (it contains `-pooler`), and set it as
+`DATABASE_URL`. The table is created automatically on first use.
+
+Without it the app still works: the browser resends the transcripts it already has, so questions
+are answered, but refreshing the page loses the analysis and nothing is cached between users.
+
+### Environment variables (dashboard → Settings → Environment Variables)
 
 ```
 OPENAI_API_KEY = sk-proj-...
+DATABASE_URL   = postgresql://...-pooler.../neondb?sslmode=require
 APP_PASSCODE   = pick-something
-CACHE_DIR      = /tmp/cache        # the repo filesystem is read-only on Vercel
+CACHE_DIR      = /tmp/cache        # only used when DATABASE_URL is empty
 ```
 
 Re-deploy after setting them (`vercel --prod`). Importing the GitHub repo in the Vercel dashboard

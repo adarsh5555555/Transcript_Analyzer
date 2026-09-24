@@ -17,6 +17,9 @@ OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.5")
 SAMPLE_TRANSCRIPTS = ["Transcript_1_Netherlands.txt", "Transcript_2_Poland.txt", "Transcript_3_Spain.txt"]
 SAMPLE_GUIDE = "Interview_Guide.txt"
 
+# Postgres when set (Neon/Supabase work well); JSON files when empty.
+DATABASE_URL = os.getenv("DATABASE_URL", "")
+
 # Public deploys: set APP_PASSCODE to gate the API, since analyses cost API credits.
 APP_PASSCODE = os.getenv("APP_PASSCODE", "")
 ANALYSES_PER_HOUR = int(os.getenv("ANALYSES_PER_HOUR", "12"))

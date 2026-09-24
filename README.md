@@ -40,7 +40,14 @@ growth figures quoted at different scopes, and genuine disagreements between the
 
 Single-server option: `cd frontend && npm run build`, then open http://localhost:8010. FastAPI serves the built app.
 
-Optional: `OPENAI_MODEL=...` in `.env` to switch models (default `gpt-5.5`).
+Optional in `.env`:
+
+| Variable | Effect |
+|---|---|
+| `OPENAI_MODEL` | model to use (default `gpt-5.5`) |
+| `DATABASE_URL` | Postgres connection string; analyses are stored there instead of in JSON files |
+| `APP_PASSCODE` | requires a shared passcode on every API call (for public deployments) |
+| `ANALYSES_PER_HOUR`, `QUESTIONS_PER_HOUR` | per-IP rate limits (defaults 12 and 80) |
 
 ## Tests and CI
 
@@ -78,7 +85,8 @@ Chat question (+ last 6 turns as context) ─────────►   ASK (
 | `backend/core/verifier.py` | Accepts a citation only if the quote is a verbatim substring of the cited segment, spoken by the right expert. |
 | `backend/core/analyzer.py` | Flag hot questions + extract → verify → synthesise → verify; chat. |
 | `backend/core/prompts.py`, `llm.py` | Prompts and a thin OpenAI structured-output wrapper. |
-| `backend/api.py` | `GET /api/health`, `GET /api/samples`, `POST /api/analyze`, `POST /api/ask`. Validation and caching only. |
+| `backend/api.py` | `GET /api/health`, `GET /api/samples`, `POST /api/analyze`, `POST /api/ask`. Validation, auth and rate limiting only. |
+| `backend/core/store.py` | Where analyses live: Postgres when `DATABASE_URL` is set, JSON files otherwise. Keyed by the content hash, so the store is also the cache. |
 | `frontend/` | React (Vite). One page: flagged questions, answers per expert, themes and disagreements, chat, transcript viewer. |
 
 The core has no FastAPI imports, so it's usable from the eval script, a CLI or a queue worker unchanged.
@@ -104,7 +112,7 @@ The core has no FastAPI imports, so it's usable from the eval script, a CLI or a
 - **Map step already scales.** Extraction is one call per transcript, run concurrently. Today the whole analysis is cached by content hash (`.cache/`); next step is caching each transcript's extraction by its own hash, so adding transcript 31 costs one call, not 31. At volume: a job queue with rate limiting and retries instead of `asyncio.gather`.
 - **Reduce step.** Synthesis reads the per-question answers, not full transcripts, once the full text no longer fits. For hundreds: synthesise per question (6 small calls), or hierarchically by market.
 - **Q&A.** Once all transcripts no longer fit in one call, embed segments and retrieve the top-k (with the question × expert answer table as a second index), then run the same cite → verify step. Retrieval changes what the model sees, not how its output is checked.
-- **Storage.** Swap the in-memory/JSON cache for Postgres (segments, answers, citations) and pgvector for embeddings.
+- **Storage.** Postgres is already the store when `DATABASE_URL` is set (`analyses(id, model, owner_id, created_at, payload jsonb)`, created on first use). Next: split `payload` into `transcripts` / `segments` / `extractions` tables so a new transcript costs one call, and add pgvector for retrieval.
 - **Evaluation.** The trap checks become a regression suite; the verified-quote ratio is tracked per model and prompt version.
 
 ## Limits
@@ -112,4 +120,5 @@ The core has no FastAPI imports, so it's usable from the eval script, a CLI or a
 - `.txt` only: `MM:SS` on its own line followed by `Speaker: text`, or `[HH:MM:SS] Speaker: text` on one line. The interviewer is recognised by labels such as `Interviewer`, `You`, `Moderator`, `Host`. PDF/DOCX/audio would need a converter in front of the parser.
 - The app assumes all uploaded transcripts belong to one project. An off-topic file is not detected; nothing is invented, but the themes section will compare unrelated calls.
 - Verification proves a quote exists and belongs to the right expert. It does not prove the summary sentence around it is a fair reading; that is what the visible quotes and the transcript viewer are for.
-- The cache is a local folder and analyses live in process memory; fine for a demo, not for multiple instances.
+- Without `DATABASE_URL` the store is a local folder, which is fine for one machine but not for several instances; set it to a Postgres URL in any real deployment.
+- `owner_id` exists on the table but nothing writes it yet: there is no auth, so anyone holding an analysis id can read that analysis.
