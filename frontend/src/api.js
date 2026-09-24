@@ -45,6 +45,11 @@ export function analyze({ files, guide, useSamples, refresh }) {
   return request("/api/analyze", { method: "POST", body: form, headers: authHeaders() });
 }
 
+// Whether this deployment keeps analyses server-side. Without a shared store
+// (serverless with no database) the server cannot recognise an analysis id, so
+// the transcripts this browser already holds travel with each question instead.
+let serverRemembers = true;
+
 export async function ask(analysisId, question, history = [], transcripts = null) {
   const send = (body) =>
     request("/api/ask", {
@@ -53,14 +58,15 @@ export async function ask(analysisId, question, history = [], transcripts = null
       body: JSON.stringify(body),
     });
 
+  const withTranscripts = { analysis_id: analysisId, question, history, transcripts };
+  if (!serverRemembers && transcripts) return send(withTranscripts);
+
   try {
-    // Normal path: the server looks the analysis up in its store.
     return await send({ analysis_id: analysisId, question, history });
   } catch (e) {
-    // No shared store (serverless without a database): resend the transcripts
-    // this browser already has, so the question can still be answered.
     if (transcripts && /unknown analysis_id/i.test(e.message)) {
-      return send({ analysis_id: analysisId, question, history, transcripts });
+      serverRemembers = false;      // stop paying for the extra round trip
+      return send(withTranscripts);
     }
     throw e;
   }
