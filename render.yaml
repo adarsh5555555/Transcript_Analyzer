@@ -1,0 +1,17 @@
+# No-Docker deploy: Render's native Python runtime.
+# The React app is built locally (npm run build) and its frontend/dist committed,
+# so this service only needs Python. FastAPI serves the page and the API.
+services:
+  - type: web
+    name: transcript-analyzer
+    runtime: python
+    plan: free
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: uvicorn backend.api:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false      # set it in the Render dashboard, never in git
+      - key: APP_PASSCODE
+        sync: false      # shared passcode for the public link
+      - key: PYTHON_VERSION
+        value: "3.12"

@@ -1,0 +1,95 @@
+/* Page background: near-black with a violet glow blooming from the bottom centre,
+   its core burning to white, finished with an etched, nano-texture matte.
+
+   The matte comes from three things, not just noise:
+   1. two grain layers at different scales (fine speckle + micro dust),
+   2. a soft diffusion haze that takes the gloss off the glow's hot core,
+   3. blacks lifted slightly off #000 so the surface reads as etched, not glossy. */
+
+:root {
+  --grain-fine: .075;    /* lift: the tooth visible on dark areas */
+  --grain-micro: .13;   /* shade: the tooth visible on the glow */
+}
+
+html,
+body {
+  background: #0A0A0D;
+}
+
+.matte-background {
+  position: fixed;
+  inset: 0;
+  background-color: #0A0A0D;
+  overflow: hidden;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.color-atmosphere {
+  position: absolute;
+  inset: 0;
+  background:
+    /* the bright core, just below the bottom edge */
+    radial-gradient(ellipse 58% 34% at 50% 104%,
+      rgba(255, 255, 255, .92) 0%,
+      rgba(226, 219, 255, .84) 15%,
+      rgba(163, 135, 255, .74) 31%,
+      rgba(109, 70, 240, .52) 47%,
+      rgba(58, 30, 150, .26) 63%,
+      rgba(10, 10, 13, 0) 81%),
+    /* the wider violet haze it sits in */
+    radial-gradient(ellipse 120% 62% at 50% 112%,
+      rgba(96, 58, 224, .38) 0%,
+      rgba(58, 32, 150, .21) 38%,
+      rgba(24, 14, 62, .10) 62%,
+      rgba(10, 10, 13, 0) 82%);
+}
+
+/* Diffusion: a blurred copy of the glow laid back over it. A matte surface
+   scatters light, so the hot core softens instead of shining. */
+.matte-diffusion {
+  position: absolute;
+  inset: -10%;
+  background: radial-gradient(ellipse 70% 40% at 50% 100%,
+    rgba(180, 160, 255, .22) 0%,
+    rgba(120, 80, 235, .12) 40%,
+    rgba(10, 10, 13, 0) 72%);
+  filter: blur(42px);
+  mix-blend-mode: screen;
+}
+
+/* Layer 1 (lift): screen blend, so the noise can raise near-black pixels.
+   soft-light/overlay cannot: they leave black at black, which is why a matte
+   finish over a dark page needs a lightening pass. */
+.paper-grain-overlay {
+  position: absolute;
+  inset: 0;
+  opacity: var(--grain-fine);
+  mix-blend-mode: screen;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncR type='linear' slope='2.6' intercept='-0.95'/%3E%3CfeFuncG type='linear' slope='2.6' intercept='-0.95'/%3E%3CfeFuncB type='linear' slope='2.6' intercept='-0.95'/%3E%3CfeFuncA type='linear' slope='0' intercept='1'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)'/%3E%3C/svg%3E");
+  background-size: 140px 140px;
+}
+
+/* Layer 2 (shade): multiply over everything, panels included, so the bright
+   glow gets the same tooth the dark areas got from layer 1. A different tile
+   size keeps the two from lining up into a visible pattern. */
+.grain {
+  position: fixed;
+  inset: 0;
+  z-index: 36;
+  pointer-events: none;
+  opacity: var(--grain-micro);
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='90' height='90'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.7' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='linear' slope='0' intercept='1'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)'/%3E%3C/svg%3E");
+  background-size: 90px 90px;
+}
+
+/* Crisper screens carry finer texture; keep it subtle so it reads as a surface
+   finish rather than as noise. */
+@media (min-resolution: 2dppx) {
+  :root {
+    --grain-fine: .065;
+    --grain-micro: .11;
+  }
+}

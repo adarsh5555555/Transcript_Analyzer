@@ -1,0 +1,45 @@
+Expert 1 - Sanne de Vries
+Role: Fleet Director, Regional Transit Operator
+Market: Netherlands
+
+00:00
+Interviewer: Thanks for making time. How would you describe electric bus adoption in the Netherlands today?
+
+00:21
+Sanne de Vries: Adoption is well advanced compared with most of Europe, but it is concentrated in the larger city concessions where the depots have already been upgraded. Smaller regional operators are moving much more slowly.
+
+01:08
+Interviewer: What is holding the slower operators back?
+
+01:16
+Sanne de Vries: Depot charging capacity is the biggest issue. The buses themselves are available, but a grid connection upgrade can take longer than the vehicle order itself.
+
+02:04
+Interviewer: So is the decision mainly financial?
+
+02:11
+Sanne de Vries: Total cost of ownership decides it. The purchase price is higher, so the case has to be made on energy and maintenance savings over the concession period, and the finance team will not approve without that.
+
+03:02
+Interviewer: What about driver training?
+
+03:09
+Sanne de Vries: Training matters more than people expect in the first year. Drivers change their braking and route behaviour, and if only part of the depot is trained the range figures we promised do not hold.
+
+04:03
+Interviewer: And reliability?
+
+04:10
+Sanne de Vries: Reliability is good now, but availability during winter is still the number people ask about, because heating draws from the same battery.
+
+05:01
+Interviewer: What do you expect over the next three to five years?
+
+05:09
+Sanne de Vries: I expect continued growth, steadily rather than sharply. In the larger city fleets I would expect something like 20 to 25 percent more electric vehicles each year, while the smaller operators stay well behind that.
+
+06:04
+Interviewer: How long does a fleet purchase normally take?
+
+06:12
+Sanne de Vries: Six to twelve months once the operator is serious, though it stretches if the depot upgrade has to go through a separate approval.
